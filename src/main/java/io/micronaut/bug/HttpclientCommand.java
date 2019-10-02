@@ -59,6 +59,7 @@ public class HttpclientCommand implements Runnable {
                     final HttpResponse<String> response = httpClient.exchange("" + code, String.class)
                             .firstOrError()
                             .blockingGet();
+                    System.out.printf("OK: response to %s%s: %s%n", BASE_URL, code, response.getStatus());
                 }
                 catch (HttpClientResponseException e) {
                     System.out.printf("OK: response to %s%s: %s / %s%n", BASE_URL, code, e.getStatus(), e.getMessage());
