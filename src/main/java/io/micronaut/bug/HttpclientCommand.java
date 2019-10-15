@@ -8,15 +8,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.micronaut.configuration.picocli.PicocliRunner;
-import io.micronaut.context.ApplicationContext;
 
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.client.RxHttpClient;
 import io.micronaut.http.client.annotation.Client;
-import io.micronaut.http.client.exceptions.HttpClientException;
 import io.micronaut.http.client.exceptions.HttpClientResponseException;
 import io.micronaut.http.client.exceptions.ReadTimeoutException;
-import picocli.CommandLine;
+import io.reactivex.Flowable;
+import io.reactivex.disposables.Disposable;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
@@ -27,6 +26,8 @@ public class HttpclientCommand implements Runnable {
 
     @Option(names = {"-v", "--verbose"}, description = "print message before each attempted code")
     boolean verbose;
+    @Option(names = {"-S", "--sync"}, description = "synchronous variant: try one code after another")
+    boolean synchronous;
     @Option(names = {"-w", "--wait"}, description = "wait period at the end (in seconds)", defaultValue = "10")
     int endWaitSeconds;
 
@@ -52,28 +53,92 @@ public class HttpclientCommand implements Runnable {
         if (codes == null) {
             return;
         }
+
+        if (synchronous) {
+            synchronousTest();
+        }
+        else {
+            pipelineTest();
+        }
+
+        if (endWaitSeconds > 0) {
+            System.out.println("waiting for " + endWaitSeconds + "s for any timeout");
+            try {
+                Thread.sleep(1000L * endWaitSeconds);
+            }
+            catch (InterruptedException e) {
+                //ok, end
+            }
+        }
+    }
+
+    private void pipelineTest() {
+        Flowable.fromIterable(codes)
+                .flatMap(code ->
+                        httpClient.exchange("" + code, String.class)
+                                .map(success -> new Result(code, success))
+                                .onErrorReturn(error -> new Result(code, error))
+                )
+                .blockingForEach(Result::print);
+    }
+
+    private class Result {
+        private final int code;
+        private final Throwable error;
+        private final HttpResponse<String> success;
+
+        public Result(int code, Throwable error) {
+            this.code = code;
+            this.error = error;
+            this.success = null;
+        }
+
+        public Result(int code, HttpResponse<String> success) {
+            this.code = code;
+            this.success = success;
+            this.error = null;
+        }
+
+        public void print() {
+            if (success != null) {
+                System.out.printf("OK: response to %s%s: %s%n", BASE_URL, code, success.getStatus());
+            }
+            else if (error instanceof HttpClientResponseException) {
+                final HttpClientResponseException e = (HttpClientResponseException) this.error;
+                System.out.printf("OK: response to %s%s: %s / %s%n", BASE_URL, code, e.getStatus(), e.getMessage());
+            }
+            else if (error instanceof ReadTimeoutException) {
+                System.out.printf("BUG! request to %s%s failed with timeout!%n", BASE_URL, code);
+                LOGGER.error("completely wrong exception", error);
+            }
+            else if (error instanceof Exception) {
+                System.out.printf("OK-ish: request to %s%s failed with exception %s%n", BASE_URL, code, error);
+                LOGGER.info("unexpected exception", error);
+            }
+            else {
+                LOGGER.warn("fatal error", error);
+            }
+        }
+
+    }
+
+    private void synchronousTest() {
         try {
             for (Integer code : codes) {
                 if (verbose) {
                     System.out.printf("Trying http code %d%n", code);
                 }
+                Result result;
                 try {
                     final HttpResponse<String> response = httpClient.exchange("" + code, String.class)
                             .firstOrError()
                             .blockingGet();
-                    System.out.printf("OK: response to %s%s: %s%n", BASE_URL, code, response.getStatus());
-                }
-                catch (HttpClientResponseException e) {
-                    System.out.printf("OK: response to %s%s: %s / %s%n", BASE_URL, code, e.getStatus(), e.getMessage());
-                }
-                catch (ReadTimeoutException e) {
-                    System.out.printf("BUG! request to %s%s failed with timeout!%n", BASE_URL, code);
-                    LOGGER.error("completely wrong exception", e);
+                    result = new Result(code, response);
                 }
                 catch (Exception e) {
-                    System.out.printf("OK-ish: request to %s%s failed with exception %s%n", BASE_URL, code, e);
-                    LOGGER.info("unexpected exception", e);
+                    result = new Result(code, e);
                 }
+                result.print();
             }
         }
         finally {
@@ -84,16 +149,5 @@ public class HttpclientCommand implements Runnable {
                 //ignore
             }
         }
-
-        if (endWaitSeconds > 0) {
-            System.out.println("waiting for "+endWaitSeconds+"s for any timeout");
-            try {
-                Thread.sleep(1000L*endWaitSeconds);
-            }
-            catch (InterruptedException e) {
-                //ok, end
-            }
-        }
-
     }
 }
