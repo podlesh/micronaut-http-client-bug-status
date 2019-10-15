@@ -25,8 +25,10 @@ import picocli.CommandLine.Parameters;
         mixinStandardHelpOptions = true)
 public class HttpclientCommand implements Runnable {
 
-    @Option(names = {"-v", "--verbose"}, description = "prign message before each attempted code")
+    @Option(names = {"-v", "--verbose"}, description = "print message before each attempted code")
     boolean verbose;
+    @Option(names = {"-w", "--wait"}, description = "wait period at the end (in seconds)", defaultValue = "10")
+    int endWaitSeconds;
 
     @Parameters(arity = "1..*", descriptionKey = "status-code")
     public List<Integer> codes;
@@ -80,6 +82,16 @@ public class HttpclientCommand implements Runnable {
             }
             catch (Exception ignored) {
                 //ignore
+            }
+        }
+
+        if (endWaitSeconds > 0) {
+            System.out.println("waiting for "+endWaitSeconds+"s for any timeout");
+            try {
+                Thread.sleep(1000L*endWaitSeconds);
+            }
+            catch (InterruptedException e) {
+                //ok, end
             }
         }
 
