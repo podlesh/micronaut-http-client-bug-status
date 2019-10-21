@@ -17,6 +17,7 @@ import io.micronaut.http.client.exceptions.ReadTimeoutException;
 import io.reactivex.Flowable;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.internal.operators.flowable.BlockingFlowableIterable;
+import io.reactivex.plugins.RxJavaPlugins;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
@@ -55,6 +56,10 @@ public class HttpclientCommand implements Runnable {
 
 
     public void run() {
+        RxJavaPlugins.setErrorHandler(e -> {
+            LOGGER.error("unhandled exception", e);
+        });
+
         if (codes == null) {
             return;
         }
