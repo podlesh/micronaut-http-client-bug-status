@@ -6,7 +6,7 @@
     ```
 2. Check that https://httpstat.us/ is running and available:
     ```bash
-    java -jar build/libs/httpclient-0.1-all.jar 200 400 409 500
+    java -jar build/libs/httpclient-0.2-all.jar 200 400 409 500
     ``` 
     Expected output:
     ```
@@ -18,7 +18,7 @@
     ```
 3. Try it with some non-standard code:
     ```bash
-    java -jar build/libs/httpclient-0.1-all.jar 519
+    java -jar build/libs/httpclient-0.2-all.jar 519
     ``` 
     Expected behavior: this line is the very last one
     ```
@@ -92,7 +92,7 @@
     ```
 3. Try it with several non-standard codes and limit:
     ```bash
-    java -jar build/libs/httpclient-0.1-all.jar 519 519 588 588 -c 1
+    java -jar build/libs/httpclient-0.2-all.jar 519 519 588 588 -c 1
     ``` 
     Expected behavior: print requested number of results (1) and no error.
     ```
