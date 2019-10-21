@@ -1,5 +1,6 @@
 package io.micronaut.bug;
 
+import java.util.Iterator;
 import java.util.List;
 
 import javax.inject.Inject;
@@ -14,6 +15,8 @@ import io.micronaut.http.client.annotation.Client;
 import io.micronaut.http.client.exceptions.HttpClientResponseException;
 import io.micronaut.http.client.exceptions.ReadTimeoutException;
 import io.reactivex.Flowable;
+import io.reactivex.disposables.Disposable;
+import io.reactivex.internal.operators.flowable.BlockingFlowableIterable;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
@@ -28,6 +31,8 @@ public class HttpclientCommand implements Runnable {
     boolean synchronous;
     @Option(names = {"-F", "--fast-fail"}, description = "first error in flow cancels that flow")
     boolean fastFail;
+    @Option(names = {"-c", "--cancel"}, description = "cancel after N requests")
+    Integer trim;
     @Option(names = {"-w", "--wait"}, description = "wait period at the end (in seconds)", defaultValue = "10")
     int endWaitSeconds;
 
@@ -61,6 +66,10 @@ public class HttpclientCommand implements Runnable {
             pipelineTest();
         }
 
+        doWait();
+    }
+
+    private void doWait() {
         if (endWaitSeconds > 0) {
             System.out.println("waiting for " + endWaitSeconds + "s for any timeout");
             try {
@@ -74,7 +83,7 @@ public class HttpclientCommand implements Runnable {
 
     private void pipelineTest() {
         try {
-            Flowable.fromIterable(codes)
+            Flowable<Result> flow = Flowable.fromIterable(codes)
                     .flatMap(code -> {
                                 Flowable<Result> resultFlow = httpClient.exchange("" + code, String.class)
                                         .map(success -> new Result(code, success));
@@ -84,7 +93,18 @@ public class HttpclientCommand implements Runnable {
                                 return resultFlow;
                             }
                     )
-                    .blockingForEach(Result::print);
+                    .doOnCancel(() -> System.out.println("flow cancelled"));
+            if (trim != null) {
+                flow = flow.take(trim);
+            }
+            BlockingFlowableIterable<Result> iterable = new BlockingFlowableIterable<>(flow, 20);
+            final Iterator<Result> it = iterable.iterator();
+            while (it.hasNext()) {
+                Result result = it.next();
+                result.print();
+            }
+            ((Disposable) it).dispose();
+            //flow.blockingForEach(Result::print);
         }
         catch (RuntimeException e) {
             if (fastFail) {
