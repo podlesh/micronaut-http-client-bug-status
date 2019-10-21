@@ -26,6 +26,8 @@ public class HttpclientCommand implements Runnable {
     boolean verbose;
     @Option(names = {"-S", "--sync"}, description = "synchronous variant: try one code after another")
     boolean synchronous;
+    @Option(names = {"-F", "--fast-fail"}, description = "first error in flow cancels that flow")
+    boolean fastFail;
     @Option(names = {"-w", "--wait"}, description = "wait period at the end (in seconds)", defaultValue = "10")
     int endWaitSeconds;
 
@@ -72,10 +74,14 @@ public class HttpclientCommand implements Runnable {
 
     private void pipelineTest() {
         Flowable.fromIterable(codes)
-                .flatMap(code ->
-                        httpClient.exchange("" + code, String.class)
-                                .map(success -> new Result(code, success))
-                                .onErrorReturn(error -> new Result(code, error))
+                .flatMap(code -> {
+                            Flowable<Result> resultFlow = httpClient.exchange("" + code, String.class)
+                                    .map(success -> new Result(code, success));
+                            if (!fastFail) {
+                                resultFlow = resultFlow.onErrorReturn(error -> new Result(code, error));
+                            }
+                            return resultFlow;
+                        }
                 )
                 .blockingForEach(Result::print);
     }
