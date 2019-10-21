@@ -73,17 +73,24 @@ public class HttpclientCommand implements Runnable {
     }
 
     private void pipelineTest() {
-        Flowable.fromIterable(codes)
-                .flatMap(code -> {
-                            Flowable<Result> resultFlow = httpClient.exchange("" + code, String.class)
-                                    .map(success -> new Result(code, success));
-                            if (!fastFail) {
-                                resultFlow = resultFlow.onErrorReturn(error -> new Result(code, error));
+        try {
+            Flowable.fromIterable(codes)
+                    .flatMap(code -> {
+                                Flowable<Result> resultFlow = httpClient.exchange("" + code, String.class)
+                                        .map(success -> new Result(code, success));
+                                if (!fastFail) {
+                                    resultFlow = resultFlow.onErrorReturn(error -> new Result(code, error));
+                                }
+                                return resultFlow;
                             }
-                            return resultFlow;
-                        }
-                )
-                .blockingForEach(Result::print);
+                    )
+                    .blockingForEach(Result::print);
+        }
+        catch (RuntimeException e) {
+            if (fastFail) {
+                System.out.println("pipeline failed with exception: " + e);
+            }
+        }
     }
 
     private class Result {
