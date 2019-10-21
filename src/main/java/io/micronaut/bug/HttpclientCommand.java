@@ -8,14 +8,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.micronaut.configuration.picocli.PicocliRunner;
-
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.client.RxHttpClient;
 import io.micronaut.http.client.annotation.Client;
 import io.micronaut.http.client.exceptions.HttpClientResponseException;
 import io.micronaut.http.client.exceptions.ReadTimeoutException;
 import io.reactivex.Flowable;
-import io.reactivex.disposables.Disposable;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
@@ -110,6 +108,9 @@ public class HttpclientCommand implements Runnable {
             else if (error instanceof ReadTimeoutException) {
                 System.out.printf("BUG! request to %s%s failed with timeout!%n", BASE_URL, code);
                 LOGGER.error("completely wrong exception", error);
+            }
+            else if (error instanceof IllegalArgumentException && error.getMessage().startsWith("Invalid HTTP status code:")) {
+                System.out.printf("OK-ish: request to %s%s failed with exception %s%n", BASE_URL, code, error);
             }
             else if (error instanceof Exception) {
                 System.out.printf("OK-ish: request to %s%s failed with exception %s%n", BASE_URL, code, error);
